@@ -1,115 +1,227 @@
-import Image from "next/image";
-import localFont from "next/font/local";
+import React, { useState, useEffect } from "react";
+import { useDropzone } from "react-dropzone";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { FileIcon, CheckCircleIcon, AlertCircleIcon } from "lucide-react";
+import axios from "axios";
 
-const geistSans = localFont({
-  src: "./fonts/GeistVF.woff",
-  variable: "--font-geist-sans",
-  weight: "100 900",
-});
-const geistMono = localFont({
-  src: "./fonts/GeistMonoVF.woff",
-  variable: "--font-geist-mono",
-  weight: "100 900",
-});
+export default function CVChecker() {
+  const [file, setFile] = useState(null);
+  const [analysisResult, setAnalysisResult] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [animatedScore, setAnimatedScore] = useState(0); 
+  const [finalScore, setFinalScore] = useState(0); 
 
-export default function Home() {
+  const [totalKeywords, setTotalKeywords] = useState(0);
+  const [overallScore, setOverallScore] = useState(0);
+  const [keywordMatched, setKeywordMatched] = useState(0);
+  const [isATSApproved, setIsATSApproved] = useState(false);
+
+  useEffect(() => {
+    const duration = 1000; 
+    const steps = 60; 
+    const increment = finalScore / steps;
+    let currentScore = 0;
+
+    const timer = setInterval(() => {
+      currentScore += increment;
+      if (currentScore >= finalScore) {
+        clearInterval(timer);
+        setAnimatedScore(finalScore);
+      } else {
+        setAnimatedScore(Math.floor(currentScore));
+      }
+    }, duration / steps);
+
+    return () => clearInterval(timer);
+  }, [finalScore]);
+
+  const onDrop = (acceptedFiles) => {
+    setFile(acceptedFiles[0]);
+    setAnalysisResult(null);
+    setError(null);
+    setFinalScore(0); 
+  };
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      'application/pdf': ['.pdf'],
+      'application/msword': ['.doc'],
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+      'text/plain': ['.txt']
+    },
+    multiple: false
+  });
+
+  const analyzeCV = async () => {
+    if (!file) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    const formData = new FormData();
+    formData.append('cv', file);
+
+    try {
+      const response = await axios.post('http://localhost:3002/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      // Set analysis results
+      setAnalysisResult(response.data.message + '\n' + JSON.stringify(response.data.results, null, 2));
+      setFinalScore(parseFloat(response.data.score)); 
+      setTotalKeywords(response.data.results.totalKeywords);
+      setOverallScore(response.data.results.overallScore);
+      setKeywordMatched(response.data.results.matchedKeywords);
+      setIsATSApproved(response.data.results.isATSApproved); // Set ATS approval status
+
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        setError(err.response?.data || "Failed to analyze CV. Please try again.");
+      } else {
+        setError("An unexpected error occurred.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
-    <div
-      className={`${geistSans.variable} ${geistMono.variable} grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]`}
-    >
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/pages/index.js
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+    <div className="container mx-auto p-4 max-w-4xl">
+      <h1 className="text-3xl font-bold mb-6 text-center">CV Checker</h1>
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Upload Your CV</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div
+              {...getRootProps()}
+              className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
+                isDragActive ? "border-primary bg-primary/10" : "border-muted-foreground"
+              }`}
+            >
+              <input {...getInputProps()} />
+              {file ? (
+                <div className="flex items-center justify-center space-x-2">
+                  <FileIcon className="w-6 h-6" />
+                  <span>{file.name}</span>
+                </div>
+              ) : (
+                <p>Drag & drop your CV here, or click to select a file</p>
+              )}
+            </div>
+            {file && (
+              <Button onClick={analyzeCV} className="w-full mt-4" disabled={isLoading}>
+                {isLoading ? "Analyzing..." : "Analyze CV"}
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Analysis Result</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-4 w-1/2" />
+              </div>
+            ) : error ? (
+              <div className="flex items-center space-x-2 text-destructive">
+                <AlertCircleIcon className="w-5 h-5" />
+                <span>{error}</span>
+              </div>
+            ) : analysisResult ? (
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2 text-green-600">
+                  <CheckCircleIcon className="w-5 h-5" />
+                  <span>Analysis Complete</span>
+                </div>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+                {/* Displaying the animated score */}
+                <div className="space-y-2">
+                  <h3 className="font-semibold mb-2">CV Score</h3>
+                  <div className="flex justify-between items-center mb-1">
+                    <p className="text-sm text-muted-foreground">Your CV is better than {animatedScore}% of applicants</p>
+                    <p className="text-2xl font-bold">
+                      {animatedScore}<span className="text-sm font-normal text-muted-foreground">/100</span>
+                    </p>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="h-4 bg-gray-200 rounded-full relative overflow-hidden">
+                    <div 
+                      className="absolute top-0 bottom-0 left-0 bg-gradient-to-r from-red-500 via-yellow-500 to-green-500 transition-all duration-1000 ease-out"
+                      style={{ width: `${animatedScore}%` }}
+                      aria-hidden="true"
+                    />
+                    <div 
+                      className="absolute top-0 bottom-0 w-0.5 bg-black transition-all duration-1000 ease-out"
+                      style={{ left: `${animatedScore}%` }}
+                      aria-hidden="true"
+                    />
+                  </div>
+
+                  {/* Feedback Message */}
+                  <p className="text-sm font-medium mt-2">
+                    {animatedScore >= 80 ? "Looks great! Good luck with job interviews!" :
+                     animatedScore >= 60 ? "Good start! Consider some improvements." :
+                     "Needs work. Let's enhance your CV!"}
+                  </p>
+                </div>
+
+                {/* Displaying detailed analysis result */}
+                <ul className="space-y-2">
+                  {/* Display keyword matches and overall score */}
+                  <li className={`flex items-center ${keywordMatched > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {keywordMatched > 0 ? (
+                      <CheckCircleIcon className="w-5 h-5 mr-2" />
+                    ) : (
+                      <AlertCircleIcon className="w-5 h-5 mr-2" />
+                    )}
+                    Keywords Matched: {keywordMatched} of {totalKeywords}
+                  </li>
+
+                  {/* Display overall score */}
+                  <li className={`flex items-center ${overallScore >= 70 ? 'text-green-600' : 'text-red-600'}`}>
+                    {overallScore >= 70 ? (
+                      <CheckCircleIcon className="w-5 h-5 mr-2" />
+                    ) : (
+                      <AlertCircleIcon className="w-5 h-5 mr-2" />
+                    )}
+                    Overall Score: {overallScore}
+                  </li>
+
+                  {/* Display ATS approval status */}
+                  <li className={`flex items-center ${isATSApproved ? 'text-green-600' : 'text-red-600'}`}>
+                    {isATSApproved ? (
+                      <CheckCircleIcon className="w-5 h-5 mr-2" />
+                    ) : (
+                      <AlertCircleIcon className="w-5 h-5 mr-2" />
+                    )}
+                    ATS Approved: {isATSApproved ? 'Yes' : 'No'}
+                  </li>
+                </ul>
+
+                {/* Detailed analysis result */}
+                {/* <pre>{analysisResult}</pre>  */}
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                <p>Upload and analyze your CV to see results</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
