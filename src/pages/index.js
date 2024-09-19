@@ -66,7 +66,7 @@ export default function CVChecker() {
     formData.append('cv', file);
 
     try {
-      const response = await axios.post('http://localhost:3002/upload', formData, {
+      const response = await axios.post('https://jobfit-server.onrender.com/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
