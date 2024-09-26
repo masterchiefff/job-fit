@@ -27,6 +27,8 @@ export default function JobRecommendations() {
   const [animatedScore, setAnimatedScore] = useState(0); 
   const [finalScore, setFinalScore] = useState(0); 
 
+  const [highlightedContent, setHighlightedContent] = useState('');
+
   const [totalKeywords, setTotalKeywords] = useState(0);
   const [overallScore, setOverallScore] = useState(0);
   const [keywordMatched, setKeywordMatched] = useState(0);
@@ -50,38 +52,12 @@ export default function JobRecommendations() {
 
     return () => clearInterval(timer);
   }, [finalScore]);
-
-  const onDrop = (acceptedFiles) => {
-    setFile(acceptedFiles[0]);
-    setAnalysisResult(null);
-    setError(null);
-    setFinalScore(0); 
-  };
   
-  useEffect(() => {
-    if (file) { 
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const arrayBuffer = e.target.result;
-        try {
-          const { value } = await mammoth.convertToHtml({ arrayBuffer });
-          setContent(value);
-        } catch (error) {
-          console.error('Error reading .docx file:', error);
-        }
-      };
-      reader.readAsArrayBuffer(file); // Pass the file directly
-    }
-  }, [file]);
   
   const handleFileChange = async (event) => {
     if (event.target.files) {
       const selectedFile = event.target.files[0]
       setFile(selectedFile) 
-      
-      // const content = await mockFileRead(selectedFile)
-      // const analysis = performAnalysis(content)
-      // setCvAnalysis(analysis);
 
       await readFile(selectedFile);
     }
@@ -98,41 +74,10 @@ export default function JobRecommendations() {
       } catch (error) {
         console.error('Error reading .docx file:', error);
       }
+
     };
     reader.readAsArrayBuffer(file);
   };
-
-  const performAnalysis = (content) => {
-    const lines = content.split('\n')
-    const highlightedLines = lines.map(line => {
-      if (line.trim().length === 0) return line
-      if (line.includes('OBJECTIVE')) return `<span class="bg-yellow-200">${line}</span>`
-      if (line.includes('Available upon request')) return `<span class="bg-yellow-200">${line}</span>`
-      if (line.toLowerCase().includes('references')) return `<span class="bg-yellow-200">${line}</span>`
-      return line
-    })
-
-    const analysis = {
-      content: content,
-      highlightedContent: highlightedLines.join('\n'),
-      atsScore: 75,
-      guidelinesCheck: {
-        'Clear formatting': true,
-        'Relevant skills highlighted': true,
-        'Proper length': false,
-        'No spelling errors': true,
-        'Quantifiable achievements': false,
-      },
-      overallScore: 80,
-      improvements: [
-        'Remove the objective statement and replace it with a professional summary',
-        'Add more quantifiable achievements in your experience section',
-        'Remove the references section',
-      ]
-    }
-
-    return analysis
-  }
 
   const analyzeCV = async (file) => {
     setIsLoading(true);
@@ -145,6 +90,9 @@ export default function JobRecommendations() {
       });
       setCvAnalysis(response.data);
       setFinalScore(response.data.score);
+      setHighlightedContent(response.data.issuesHighlighted);
+      await performAnalysis(highlightedContent);
+      console.log(await performAnalysis(highlightedContent))
     } catch (err) {
       setError("Failed to analyze CV. Please try again.");
       console.error(err);
@@ -281,7 +229,7 @@ export default function JobRecommendations() {
                       <h3 className="text-lg font-semibold mb-2">CV Content</h3>
                       <pre 
                         className="whitespace-pre-wrap text-sm"
-                        dangerouslySetInnerHTML={{ __html: content }}
+                        dangerouslySetInnerHTML={{ __html: highlightedContent }} 
                       />
                     </div>
                   )}
