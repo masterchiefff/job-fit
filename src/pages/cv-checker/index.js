@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import mammoth from 'mammoth';
 import { motion } from 'framer-motion'
 import axios from 'axios'
@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
-import { Progress } from "@/components/ui/progress"
-import { Bell, Printer, ChevronDown, Upload, Menu, Check, X, AlertCircleIcon, CheckCircleIcon } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Bell, Printer, ChevronDown, RefreshCw, Italic, List, Underline, Edit, Bold, Upload, Menu, Check, X, AlertCircleIcon, CheckCircleIcon } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,6 +26,9 @@ export default function JobRecommendations() {
   const [error, setError] = useState(null);
   const [animatedScore, setAnimatedScore] = useState(0); 
   const [finalScore, setFinalScore] = useState(0); 
+  const [editableCvContent, setEditableCvContent] = useState('')
+  const fileInputRef = useRef(null)
+  const editorRef = useRef(null)
 
   const [highlightedContent, setHighlightedContent] = useState('');
 
@@ -52,7 +55,18 @@ export default function JobRecommendations() {
 
     return () => clearInterval(timer);
   }, [finalScore]);
-  
+
+  const handleFormatting = (command) => {
+    document.execCommand(command, false, null)
+    editorRef.current.focus()
+  }  
+
+  const handleSaveEdit = () => {
+    const editedContent = editorRef.current.innerHTML
+    setEditableCvContent(editedContent)
+    const newAnalysis = performAnalysis(editedContent)
+    setCvAnalysis(newAnalysis)
+  }
   
   const handleFileChange = async (event) => {
     if (event.target.files) {
@@ -60,6 +74,12 @@ export default function JobRecommendations() {
       setFile(selectedFile) 
 
       await readFile(selectedFile);
+    }
+  }
+
+  const handleReupload = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click()
     }
   }
 
@@ -91,8 +111,6 @@ export default function JobRecommendations() {
       setCvAnalysis(response.data);
       setFinalScore(response.data.score);
       setHighlightedContent(response.data.issuesHighlighted);
-      await performAnalysis(highlightedContent);
-      console.log(await performAnalysis(highlightedContent))
     } catch (err) {
       setError("Failed to analyze CV. Please try again.");
       console.error(err);
@@ -227,10 +245,50 @@ export default function JobRecommendations() {
                   ) : (
                     <div className="h-[calc(100vh-3rem)] overflow-y-auto">
                       <h3 className="text-lg font-semibold mb-2">CV Content</h3>
-                      <pre 
-                        className="whitespace-pre-wrap text-sm"
-                        dangerouslySetInnerHTML={{ __html: highlightedContent }} 
-                      />
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-sm font-normal">CV name here</h3>
+                        <Button onClick={handleReupload} variant="outline" size="sm">
+                          <RefreshCw className="w-4 h-4 mr-2" />
+                          Upload New CV
+                        </Button>
+                      </div>
+                      <Tabs defaultValue="view" className="w-full">
+                        <TabsList className="mb-4">
+                          <TabsTrigger value="view">View</TabsTrigger>
+                          <TabsTrigger value="edit">Edit</TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="view" className="h-[calc(100vh-24rem)] overflow-y-auto">
+                          <pre 
+                            className="whitespace-pre-wrap text-sm"
+                            dangerouslySetInnerHTML={{ __html: highlightedContent }}
+                          />
+                        </TabsContent>
+                        <TabsContent value="edit" className="h-[calc(100vh-24rem)]">
+                          <div className="mb-4 flex space-x-2">
+                            <Button onClick={() => handleFormatting('bold')} variant="outline" size="sm">
+                              <Bold className="w-4 h-4" />
+                            </Button>
+                            <Button onClick={() => handleFormatting('italic')} variant="outline" size="sm">
+                              <Italic className="w-4 h-4" />
+                            </Button>
+                            <Button onClick={() => handleFormatting('underline')} variant="outline" size="sm">
+                              <Underline className="w-4 h-4" />
+                            </Button>
+                            <Button onClick={() => handleFormatting('insertUnorderedList')} variant="outline" size="sm">
+                              <List className="w-4 h-4" />
+                            </Button>
+                          </div>
+                          <div
+                            ref={editorRef}
+                            className="h-[calc(100vh-32rem)] overflow-y-auto border p-4 rounded-md"
+                            contentEditable
+                            dangerouslySetInnerHTML={{ __html: editableCvContent }}
+                          />
+                          <Button onClick={handleSaveEdit} className="mt-4">
+                            Save Changes
+                          </Button>
+                        </TabsContent>
+                      </Tabs>
                     </div>
                   )}
                 </CardContent>
